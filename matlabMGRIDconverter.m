@@ -1,11 +1,13 @@
 ft_defaults
-patient = 'PY18N015/Pre/';
-whatever_CT_used_to_localize_the_electrodes = strcat(patient,'CT/CT_LIA.nii.gz');
+pathToData = 'E:\Shares\Gershwin\Recon\PrePostSurgicalComparison\'
+patient = strcat(pathToData,'PY18N016/Pre/');
+whatever_CT_used_to_localize_the_electrodes = strcat(patient,'CT/CT_LIA.nii');
 corresponding_mgrid = strcat(patient,'electrodes/electrodes.mgrid');
 
 CT = ft_read_mri(whatever_CT_used_to_localize_the_electrodes);
 elec_xyz = ft_read_sens(corresponding_mgrid, 'sensetype','eeg');
 
+%%
 % This is where it'll get tricky. Change the values below to flip the
 % electrodes to correspond with the orientation in the CT
 zTransform = 256; % This example changes LIP to LIA
@@ -45,18 +47,19 @@ camlight;
 hold on
 ft_plot_sens(elec_tkrRAS)
 %% 
-exportText(elec_RAS,'electrodes/electrodes_RAS.txt',patient)
-exportText(elec_tkrRAS,'electrodes/electrodes_tkrRAS.txt',patient)
-
+exportText(elec_RAS,'electrodes/electrodes_RAS.tsv',patient);
+exportText(elec_tkrRAS,'electrodes/electrodes_tkrRAS.tsv',patient);
+%%
 function exportText(elec,name,patient)
-    file{1} = regexprep(elec.label,'\d+$','');
-    file{2} = elec.label;
+    sep = regexp(elec.label,'\d');
     file{3} = elec.elecpos(:,1);
     file{4} = elec.elecpos(:,2);
     file{5} = elec.elecpos(:,3);
-    file{6} = zeros(length(elec.elecpos(:,1)),1);
-    fid = fopen(strcat('./',patient,name),'wt');
-    for i = 1:length(file{2})
-        fprintf(fid,'%s\t \t%s\t%-.3f\t%-.3f\t%-.3f\t %-.3f\n',char(file{1}(i,:)),char(file{2}(i,:)),file{3}(i),file{4}(i),file{5}(i),file{6}(i));
+    fid = fopen(strcat(patient,name),'wt');
+    fprintf(fid,'name\t x\t y\t z\n');
+    for i = 1:length(elec.label)
+        elecName = strcat(elec.label{i}(1:sep{i}-1),"'",elec.label{i}((sep{i}:length(elec.label{i}))));
+        fprintf(fid, '%s\t %-.3f\t %-.3f\t %-.3f\n', elecName, file{3}(i), file{4}(i), file{5}(i));
     end
+    fclose(fid)
 end
