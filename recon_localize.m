@@ -92,6 +92,7 @@ end
 cfg = [];
 cfg.channel = RASelectrodes.label;
 RASelectrodes = ft_electrodeplacement(cfg, ct_acpc_f, fsmri_acpc);
+%%
 MR_vox = RASelectrodes;
 MR_vox.chanpos = ft_warp_apply(inv(fsmri_acpc.hdr.vox2ras0), RASelectrodes.chanpos);
 tkrRAS = MR_vox;
@@ -99,6 +100,7 @@ tkrRAS.chanpos =  ft_warp_apply(fsmri_acpc.hdr.tkrvox2ras, MR_vox.chanpos);
 
 %%
 exportTSV(tkrRAS,strcat(rawPath,subjID,'/electrodes/tkrRASelectrodes.tsv'));
-exportTSV(RASelectrodes,strcat(rawPath,subjID,'/electrodes/RASelectrodes.tsv'));
+exportTSV(MR_vox,strcat(rawPath,subjID,'/electrodes/mrVOX.tsv'));
+exportTSV(RASelectrodes,strcat(rawPath,subjID,'/electrodes/RASelectrodes.tsv'));11
 save(strcat(rawPath,subjID,'\electrodes\RASelectrodes.mat'), 'RASelectrodes');
 save(strcat(rawPath,subjID,'\electrodes\tkrRASelectrodes.mat'), 'tkrRAS');
