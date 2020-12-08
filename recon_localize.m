@@ -78,10 +78,10 @@ cfg.parameter = 'anatomy';
 ft_volumewrite(cfg, ct_acpc_f);
 %%
 % Mark the electrodes
-elec = {}
+elec = {};
 i=1;
-electrodeLabels = ["AMD","ALD","PMD","PLD", "CD", "AAC", "PAC", "LFA", "LFP", "LA", "LAH", "LPH"];
-contactNumbers = [6,6,6,6,4,8,10,4,8,10,9,9];
+electrodeLabels = ["LA","LAH","LPH","LIF","LPOA","LPOB","RA","RAH","RPH","RIF"];
+contactNumbers = [10,10,10,6,8,6,10,10,10,6];
 for numLabels = 1:length(electrodeLabels)
     for numContacts = 1:contactNumbers(numLabels)
         elec.label{i,1} = char(strcat(electrodeLabels(numLabels),string(numContacts)));
@@ -90,7 +90,7 @@ for numLabels = 1:length(electrodeLabels)
 end
 %%
 cfg = [];
-cfg.channel = RASelectrodes.label;
+cfg.channel = elec.label;
 RASelectrodes = ft_electrodeplacement(cfg, ct_acpc_f, fsmri_acpc);
 %%
 MR_vox = RASelectrodes;
@@ -99,8 +99,13 @@ tkrRAS = MR_vox;
 tkrRAS.chanpos =  ft_warp_apply(fsmri_acpc.hdr.tkrvox2ras, MR_vox.chanpos);
 
 %%
-exportTSV(tkrRAS,strcat(rawPath,subjID,'/electrodes/tkrRASelectrodes.tsv'));
-exportTSV(MR_vox,strcat(rawPath,subjID,'/electrodes/mrVOX.tsv'));
-exportTSV(RASelectrodes,strcat(rawPath,subjID,'/electrodes/RASelectrodes.tsv'));11
-save(strcat(rawPath,subjID,'\electrodes\RASelectrodes.mat'), 'RASelectrodes');
-save(strcat(rawPath,subjID,'\electrodes\tkrRASelectrodes.mat'), 'tkrRAS');
+exportTSV(tkrRAS,strcat(rawPath,subjID,'\electrodes\tkrRAS_electrodes.tsv'));
+exportTSV(RASelectrodes,strcat(rawPath,subjID,'\electrodes\RAS_electrodes.tsv'));
+save(strcat(rawPath,subjID,'\electrodes\RAS_electrodes.mat'), 'RASelectrodes');
+save(strcat(rawPath,subjID,'\electrodes\tkrRAS_electrodes.mat'), 'tkrRAS');
+%%
+cfg           = [];
+cfg.method    = 'cortexhull';
+cfg.headshape = './Freesurfer/surf/lh.pial';
+cfg.fshome    = '/Applications/freesurfer'; % for instance, '/Applications/freesurfer'
+hull_lh = ft_prepare_mesh(cfg);
