@@ -1,106 +1,57 @@
-% Initialize fieldtrip
-ft_defaults
-%Set your subject/path
-subjID = 'PY20N007_SW';
-rawPath = 'E:\Shares\Gershwin\Recon\2020\';
-%%
-%Read in the raw T1
-T1_raw = strcat(rawPath,subjID,'\MR\preOp\T1.nii');
-mri = ft_read_mri(T1_raw); % we used the dcm series
-%%
-% Determine the orientation (if raw, probably RAS) and mark acpc
-ft_determine_coordsys(mri);
-cfg           = [];
-cfg.method    = 'interactive';
-cfg.coordsys  = 'acpc';
-mri_acpc = ft_volumerealign(cfg, mri);
-%%
-cfg           = [];
-cfg.filename  = strcat(rawPath,subjID,'\MR\preOp\T1_acpc');
-cfg.filetype  = 'nifti';
-cfg.parameter = 'anatomy';
-ft_volumewrite(cfg, mri_acpc);
-%% 
-% Send acpc-aligned T1 to Freesurfer for procesing
-username = input('Zappa username: ','s')
-password = input('Zappa password: ','s')
-connection = ssh2_config('zappa.neuro.jhu.edu',username,password)
-clear username password
-%%
-ssh2_simple_command(connection.hostname, connection.username, connection.password, char(strcat('mkdir /mnt/shared/Subjects/sourcedata/','PY20N006_MM')));
-sftp_simple_put(connection.hostname, connection.username, connection.password, 'acpc.nii','/mnt/shared/Subjects/sourcedata/PY20N006_SW')
-%%
-msg = ['export FREESURFER_HOME=/usr/local/freesurfer; \' ...
-    'export SUBJECTS_DIR=/mnt/shared/Subjects/derivatives/freesurfer; \' ...
-    'source $FREESURFER_HOME/SetUpFreeSurfer.sh; \' ...
-    'recon-all -s PY20N006_SW -i /mnt/shared/Subjects/sourcedata/PY20N006_SW/T1.nii -openmp 48 -all']
-ssh2_command(connection, msg)
-%%
-%Get processed T1 back from Zappa
-sftp_simple_get(connection.hostname, connection.username, connection.password,'/mnt/shared/Subjects/derivatives/freesurfer/PY20N006_SW/mri/T1.mgz', strcat(rawPath,subjID))
-%ssh2_close(connection)
-%%
-fsmri_acpc = ft_read_mri(strcat(rawPath,subjID,'\MR\preOp\T1_acpc_processed.nii'));
-fsmri_acpc.coordsys = 'acpc';
+
+%% original version
+MR_vox = RAS_electrodes;
+MR_vox.chanpos = ft_warp_apply(inv(fsmri_acpc.hdr.vox2ras0), RAS_electrodes.chanpos);
+MR_vox.elecpos = ft_warp_apply(inv(fsmri_acpc.hdr.vox2ras0), RAS_electrodes.elecpos);
+
+tkrRAS_electrodes = MR_vox;
+tkrRAS_electrodes.chanpos =  ft_warp_apply(fsmri_acpc.hdr.tkrvox2ras, MR_vox.chanpos);
+tkrRAS_electrodes.elecpos =  ft_warp_apply(fsmri_acpc.hdr.tkrvox2ras, MR_vox.elecpos);
+
+VOX_electrodes =tkrRAS_electrodes;
+VOX_electrodes.chanpos =  ft_warp_apply(inv(fsmri_acpc.hdr.tkrvox2ras), tkrRAS_electrodes.chanpos);
+VOX_electrodes.elecpos =  ft_warp_apply(inv(fsmri_acpc.hdr.tkrvox2ras), tkrRAS_electrodes.elecpos);
+
+%% MAKE electrodes folder before this code
+exportTSV(RAS_electrodes,strcat(rawPath,subjID,'\electrodes\RAS_electrodes.tsv'));
+exportTSV(tkrRAS_electrodes,strcat(rawPath,subjID,'\electrodes\tkrRAS_electrodes.tsv'));
+exportTSV(VOX_electrodes,strcat(rawPath,subjID,'\electrodes\VOX_electrodes.tsv'));
+
+save(strcat(rawPath,subjID,'\electrodes\RAS_electrodes.mat'), 'RAS_electrodes');
+save(strcat(rawPath,subjID,'\electrodes\tkrRAS_electrodes.mat'), 'tkrRAS_electrodes');
+save(strcat(rawPath,subjID,'\electrodes\VOX_electrodes.mat'), 'VOX_electrodes');
 
 %%
-% Read in the raw CT
-CT_Raw = strcat(rawPath,subjID,'\CT\CT.nii');
-ct = ft_read_mri(CT_Raw);
+elec = RAS_electrodes;
+elec.elecpos(:,2)=-RAS_electrodes.elecpos(:,2)-41;
+elec.chanpos(:,2)=-RAS_electrodes.chanpos(:,2)-41;
 %%
-ct = ft_determine_coordsys(ct);
-
-%% Mark the fiducials and align CT to ctf and then acpc
+fieldtrip2bis('./electrodes.mgrid', elec,'./MR/preOp/T1_3D_PRE_20210311100112_3_processed.nii')
+%%
 cfg           = [];
-cfg.method    = 'interactive';
-cfg.coordsys  = 'ctf';
-ct_ctf = ft_volumerealign(cfg, ct);
+cfg.method    = 'cortexhull';
+cfg.headshape = './rh.pial.T1';
+cfg.fshome    = '/Applications/freesurfer'; % for instance, '/Applications/freesurfer'
+hull_lh = ft_prepare_mesh(cfg);
 %%
-ct_ctf = ft_determine_coordsys(ct_ctf);
-%%
-ct_acpc = ft_convert_coordsys(ct_ctf, 'acpc');
-%%
-ft_determine_coordsys(ct_acpc);
-
-%%
-% Register the CT to the T1
+elec_acpc_fr = tkrRAS_electrodes;
+grids = {'LTG*', 'LPOS*','LIPS*','LSPS*','STGS*','ABTS*','MBTS*','PBTS*'};
+for g = 1:numel(grids)
 cfg             = [];
-cfg.method      = 'spm';
-cfg.spmversion  = 'spm12';
-cfg.coordsys    = 'acpc';
-cfg.viewresult  = 'yes';
-ct_acpc_f = ft_volumerealign(cfg, ct_acpc, fsmri_acpc);
-%%
-cfg           = [];
-cfg.filename  = strcat(rawPath,subjID,'\CT\ct_acpc');
-cfg.filetype  = 'nifti';
-cfg.parameter = 'anatomy';
-ft_volumewrite(cfg, ct_acpc_f);
-%%
-% Mark the electrodes
-elec = {}
-i=1;
-electrodeLabels = ["AMD","ALD","PMD","PLD", "CD", "AAC", "PAC", "LFA", "LFP", "LA", "LAH", "LPH"];
-contactNumbers = [6,6,6,6,4,8,10,4,8,10,9,9];
-for numLabels = 1:length(electrodeLabels)
-    for numContacts = 1:contactNumbers(numLabels)
-        elec.label{i,1} = char(strcat(electrodeLabels(numLabels),string(numContacts)));
-        i=i+1;
-    end
+cfg.channel     = grids{g};
+cfg.keepchannel = 'yes';
+cfg.elec        = elec_acpc_fr;
+cfg.method      = 'headshape';
+cfg.headshape   = hull_lh;
+cfg.warp        = 'dykstra2012';
+cfg.feedback    = 'yes';
+elec_acpc_fr = ft_electroderealign(cfg);
 end
-%%
-cfg = [];
-cfg.channel = RASelectrodes.label;
-RASelectrodes = ft_electrodeplacement(cfg, ct_acpc_f, fsmri_acpc);
-%%
-MR_vox = RASelectrodes;
-MR_vox.chanpos = ft_warp_apply(inv(fsmri_acpc.hdr.vox2ras0), RASelectrodes.chanpos);
-tkrRAS = MR_vox;
-tkrRAS.chanpos =  ft_warp_apply(fsmri_acpc.hdr.tkrvox2ras, MR_vox.chanpos);
+
+
+
 
 %%
-exportTSV(tkrRAS,strcat(rawPath,subjID,'/electrodes/tkrRASelectrodes.tsv'));
-exportTSV(MR_vox,strcat(rawPath,subjID,'/electrodes/mrVOX.tsv'));
-exportTSV(RASelectrodes,strcat(rawPath,subjID,'/electrodes/RASelectrodes.tsv'));11
-save(strcat(rawPath,subjID,'\electrodes\RASelectrodes.mat'), 'RASelectrodes');
-save(strcat(rawPath,subjID,'\electrodes\tkrRASelectrodes.mat'), 'tkrRAS');
+
+ft_plot_ortho(fsmri_acpc.anatomy, 'transform', fsmri_acpc.transform, 'style', 'intersect');
+ft_plot_sens(RAS_electrodes, 'label', 'on', 'fontcolor', 'k', 'fontsize', 6, 'facecolor', [1,0,0]);
